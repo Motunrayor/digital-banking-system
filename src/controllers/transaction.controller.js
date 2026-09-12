@@ -47,6 +47,36 @@ const getTransactionStatus = async (req, res) => {
   }
 };
 
+const getTransactionHistory = async (req, res) => {
+  try {
+    const transactions = await Transaction.find({
+      customer: req.customerId,
+    }).sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      transactions: transactions.map((transaction) => ({
+        reference: transaction.reference,
+        senderAccountNumber: transaction.senderAccountNumber,
+        recipientAccountNumber: transaction.recipientAccountNumber,
+        recipientBankCode: transaction.recipientBankCode,
+        amount: transaction.amount,
+        transactionType: transaction.transactionType,
+        status: transaction.status,
+        narration: transaction.narration,
+        createdAt: transaction.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error("Transaction history error:", error.message);
+
+    return res.status(500).json({
+      message: "Transaction history failed",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getTransactionStatus,
+  getTransactionHistory,
 };
