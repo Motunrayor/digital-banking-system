@@ -224,3 +224,131 @@ test("balance check returns 404 when the authenticated customer has no account",
     delete require.cache[controllerPath];
   }
 });
+
+test("name enquiry uses the account number from route params", async () => {
+  const originalLoad = Module._load;
+  const controllerPath = require.resolve("../src/controllers/account.controller.js");
+  delete require.cache[controllerPath];
+
+  let requestedAccountNumber;
+
+  try {
+    Module._load = function mockedLoad(request, parent, isMain) {
+      if (request === "../models/customer.model") {
+        return {};
+      }
+
+      if (request === "../models/account.model") {
+        return {};
+      }
+
+      if (request === "../services/nibss.service") {
+        return {
+          createAccount: async () => ({}),
+          getAccountBalance: async () => ({}),
+          getNameEnquiry: async (accountNumber) => {
+            requestedAccountNumber = accountNumber;
+            return {
+              message: "Name enquiry successful",
+              accountNumber,
+              accountName: "Inioluwa Blessed",
+              bankCode: "762",
+            };
+          },
+        };
+      }
+
+      return originalLoad.apply(this, arguments);
+    };
+
+    const { getAccountNameEnquiry } = require("../src/controllers/account.controller.js");
+    const req = {
+      params: { accountNumber: "7628180202" },
+      customerId: "customer-id",
+    };
+    const res = {
+      statusCode: undefined,
+      body: undefined,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(body) {
+        this.body = body;
+        return this;
+      },
+    };
+
+    await getAccountNameEnquiry(req, res);
+
+    assert.equal(requestedAccountNumber, "7628180202");
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.body, {
+      message: "Name enquiry successful",
+      accountNumber: "7628180202",
+      accountName: "Inioluwa Blessed",
+      bankCode: "762",
+    });
+  } finally {
+    Module._load = originalLoad;
+    delete require.cache[controllerPath];
+  }
+});
+
+test("name enquiry returns 400 when account number is missing", async () => {
+  const originalLoad = Module._load;
+  const controllerPath = require.resolve("../src/controllers/account.controller.js");
+  delete require.cache[controllerPath];
+
+  try {
+    Module._load = function mockedLoad(request, parent, isMain) {
+      if (request === "../models/customer.model") {
+        return {};
+      }
+
+      if (request === "../models/account.model") {
+        return {};
+      }
+
+      if (request === "../services/nibss.service") {
+        return {
+          createAccount: async () => ({}),
+          getAccountBalance: async () => ({}),
+          getNameEnquiry: async () => {
+            throw new Error("should not call NIBSS without an account number");
+          },
+        };
+      }
+
+      return originalLoad.apply(this, arguments);
+    };
+
+    const { getAccountNameEnquiry } = require("../src/controllers/account.controller.js");
+    const req = {
+      params: { accountNumber: " " },
+      customerId: "customer-id",
+    };
+    const res = {
+      statusCode: undefined,
+      body: undefined,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(body) {
+        this.body = body;
+        return this;
+      },
+    };
+
+    await getAccountNameEnquiry(req, res);
+
+    assert.equal(res.statusCode, 400);
+    assert.deepEqual(res.body, {
+      message: "Account number is required",
+    });
+  } finally {
+    Module._load = originalLoad;
+    delete require.cache[controllerPath];
+  }
+});

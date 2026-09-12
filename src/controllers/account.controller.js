@@ -3,6 +3,7 @@ const Account = require("../models/account.model");
 const {
   createAccount,
   getAccountBalance,
+  getNameEnquiry,
 } = require("../services/nibss.service");
 
 const createCustomerAccount = async (req, res) => {
@@ -112,7 +113,34 @@ const getCustomerAccountBalance = async (req, res) => {
   }
 };
 
+const getAccountNameEnquiry = async (req, res) => {
+  try {
+    const accountNumber = req.params.accountNumber?.trim();
+
+    if (!accountNumber) {
+      return res.status(400).json({
+        message: "Account number is required",
+      });
+    }
+
+    const nameEnquiry = await getNameEnquiry(accountNumber);
+
+    return res.status(200).json(nameEnquiry);
+  } catch (error) {
+    console.error(
+      "Name enquiry error:",
+      error.response?.data || error.message,
+    );
+
+    return res.status(500).json({
+      message: "Name enquiry failed",
+      error: error.response?.data || error.message,
+    });
+  }
+};
+
 module.exports = {
   createCustomerAccount,
   getCustomerAccountBalance,
+  getAccountNameEnquiry,
 };

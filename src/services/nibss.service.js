@@ -81,6 +81,21 @@ const getAccountBalance = async (accountNumber) => {
   return response.data;
 };
 
+const getNameEnquiry = async (accountNumber) => {
+  const token = await getNibssToken();
+
+  const response = await nibssApi.get(
+    `/api/account/name-enquiry/${accountNumber}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+
+  return response.data;
+};
+
 module.exports = {
   insertBvn,
   validateBvn,
@@ -89,4 +104,5 @@ module.exports = {
   getNibssToken,
   createAccount,
   getAccountBalance,
+  getNameEnquiry,
 };
