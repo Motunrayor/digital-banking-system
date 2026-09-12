@@ -2,6 +2,7 @@ const express = require("express");
 const customerRoutes = require("./routes/auth.routes");
 const onboardingRoutes = require("./routes/onboarding.routes");
 const accountRoutes = require("./routes/account.routes");
+const transactionRoutes = require("./routes/transaction.routes");
 
 const app = express();
 
@@ -16,5 +17,6 @@ app.get("/", (req, res) => {
 app.use("/api/auth", customerRoutes);
 app.use("/api/onboarding", onboardingRoutes);
 app.use("/api/account", accountRoutes);
+app.use("/api/transactions", transactionRoutes);
 
 module.exports = app;

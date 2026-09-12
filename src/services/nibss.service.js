@@ -109,6 +109,18 @@ const transferFunds = async (data) => {
   return response.data;
 };
 
+const getTransactionStatus = async (reference) => {
+  const token = await getNibssToken();
+
+  const response = await nibssApi.get(`/api/transaction/${reference}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  return response.data;
+};
+
 module.exports = {
   insertBvn,
   validateBvn,
@@ -119,4 +131,5 @@ module.exports = {
   getAccountBalance,
   getNameEnquiry,
   transferFunds,
+  getTransactionStatus,
 };
