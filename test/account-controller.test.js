@@ -352,3 +352,183 @@ test("name enquiry returns 400 when account number is missing", async () => {
     delete require.cache[controllerPath];
   }
 });
+
+test("transfer uses the authenticated customer's account as sender and records transaction", async () => {
+  const originalLoad = Module._load;
+  const controllerPath = require.resolve("../src/controllers/account.controller.js");
+  delete require.cache[controllerPath];
+
+  let transferPayload;
+  let savedTransaction;
+
+  function Transaction(data) {
+    savedTransaction = data;
+    return {
+      ...data,
+      async save() {},
+    };
+  }
+
+  try {
+    Module._load = function mockedLoad(request, parent, isMain) {
+      if (request === "../models/customer.model") {
+        return {};
+      }
+
+      if (request === "../models/account.model") {
+        return {
+          findOne: async (query) => {
+            if (query.customer === "customer-id") {
+              return {
+                accountNumber: "7628180202",
+              };
+            }
+
+            if (query.accountNumber === "7621111111") {
+              return {
+                accountNumber: "7621111111",
+                bankCode: "762",
+              };
+            }
+
+            return null;
+          },
+        };
+      }
+
+      if (request === "../models/transaction.model") {
+        return Transaction;
+      }
+
+      if (request === "../services/nibss.service") {
+        return {
+          createAccount: async () => ({}),
+          getAccountBalance: async () => ({}),
+          getNameEnquiry: async () => ({}),
+          transferFunds: async (payload) => {
+            transferPayload = payload;
+            return {
+              message: "Transfer successful",
+              reference: "NIBSS-REF-001",
+              status: "SUCCESSFUL",
+              amount: 2000,
+            };
+          },
+        };
+      }
+
+      return originalLoad.apply(this, arguments);
+    };
+
+    const { transferCustomerFunds } = require("../src/controllers/account.controller.js");
+    const req = {
+      body: {
+        from: "attacker-account",
+        to: "7621111111",
+        amount: 2000,
+        narration: "Lunch",
+      },
+      customerId: "customer-id",
+    };
+    const res = {
+      statusCode: undefined,
+      body: undefined,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(body) {
+        this.body = body;
+        return this;
+      },
+    };
+
+    await transferCustomerFunds(req, res);
+
+    assert.deepEqual(transferPayload, {
+      from: "7628180202",
+      to: "7621111111",
+      amount: 2000,
+    });
+    assert.equal(savedTransaction.customer, "customer-id");
+    assert.equal(savedTransaction.senderAccountNumber, "7628180202");
+    assert.equal(savedTransaction.recipientAccountNumber, "7621111111");
+    assert.equal(savedTransaction.recipientBankCode, "762");
+    assert.equal(savedTransaction.amount, 2000);
+    assert.equal(savedTransaction.transactionType, "INTRA_BANK");
+    assert.equal(savedTransaction.reference, "NIBSS-REF-001");
+    assert.equal(savedTransaction.status, "SUCCESSFUL");
+    assert.equal(savedTransaction.narration, "Lunch");
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.message, "Transfer successful");
+  } finally {
+    Module._load = originalLoad;
+    delete require.cache[controllerPath];
+  }
+});
+
+test("transfer returns 400 when amount is not greater than zero", async () => {
+  const originalLoad = Module._load;
+  const controllerPath = require.resolve("../src/controllers/account.controller.js");
+  delete require.cache[controllerPath];
+
+  try {
+    Module._load = function mockedLoad(request, parent, isMain) {
+      if (request === "../models/customer.model") {
+        return {};
+      }
+
+      if (request === "../models/account.model") {
+        return {};
+      }
+
+      if (request === "../models/transaction.model") {
+        return function Transaction() {};
+      }
+
+      if (request === "../services/nibss.service") {
+        return {
+          createAccount: async () => ({}),
+          getAccountBalance: async () => ({}),
+          getNameEnquiry: async () => ({}),
+          transferFunds: async () => {
+            throw new Error("should not call NIBSS with an invalid amount");
+          },
+        };
+      }
+
+      return originalLoad.apply(this, arguments);
+    };
+
+    const { transferCustomerFunds } = require("../src/controllers/account.controller.js");
+    const req = {
+      body: {
+        to: "7621111111",
+        amount: 0,
+      },
+      customerId: "customer-id",
+    };
+    const res = {
+      statusCode: undefined,
+      body: undefined,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(body) {
+        this.body = body;
+        return this;
+      },
+    };
+
+    await transferCustomerFunds(req, res);
+
+    assert.equal(res.statusCode, 400);
+    assert.deepEqual(res.body, {
+      message: "Amount must be greater than 0",
+    });
+  } finally {
+    Module._load = originalLoad;
+    delete require.cache[controllerPath];
+  }
+});

@@ -1,9 +1,11 @@
 const Customer = require("../models/customer.model");
 const Account = require("../models/account.model");
+const Transaction = require("../models/transaction.model");
 const {
   createAccount,
   getAccountBalance,
   getNameEnquiry,
+  transferFunds,
 } = require("../services/nibss.service");
 
 const createCustomerAccount = async (req, res) => {
@@ -139,8 +141,100 @@ const getAccountNameEnquiry = async (req, res) => {
   }
 };
 
+const transferCustomerFunds = async (req, res) => {
+  try {
+    const { to, amount, narration } = req.body;
+
+    if (!to) {
+      return res.status(400).json({
+        message: "Recipient account number is required",
+      });
+    }
+
+    if (amount === undefined) {
+      return res.status(400).json({
+        message: "Amount is required",
+      });
+    }
+
+    if (Number(amount) <= 0) {
+      return res.status(400).json({
+        message: "Amount must be greater than 0",
+      });
+    }
+
+    const senderAccount = await Account.findOne({
+      customer: req.customerId,
+    });
+
+    if (!senderAccount) {
+      return res.status(404).json({
+        message: "Sender account not found",
+      });
+    }
+
+    const recipientAccount = await Account.findOne({
+      accountNumber: to,
+    });
+
+    const transferData = {
+      from: senderAccount.accountNumber,
+      to,
+      amount: Number(amount),
+    };
+
+    const transferResponse = await transferFunds(transferData);
+    const transferDetails =
+      transferResponse.transaction || transferResponse.data || transferResponse;
+
+    const transaction = new Transaction({
+      customer: req.customerId,
+      senderAccountNumber: senderAccount.accountNumber,
+      recipientAccountNumber: to,
+      recipientBankCode:
+        recipientAccount?.bankCode ||
+        transferDetails.recipientBankCode ||
+        transferDetails.bankCode,
+      amount: Number(amount),
+      transactionType: recipientAccount ? "INTRA_BANK" : "INTER_BANK",
+      reference:
+        transferDetails.reference ||
+        transferDetails.transactionReference ||
+        transferDetails.ref,
+      status: transferDetails.status,
+      narration,
+    });
+
+    await transaction.save();
+
+    return res.status(200).json({
+      message: transferResponse.message || "Transfer successful",
+      transfer: transferResponse,
+      transaction: {
+        reference: transaction.reference,
+        status: transaction.status,
+        transactionType: transaction.transactionType,
+        amount: transaction.amount,
+        senderAccountNumber: transaction.senderAccountNumber,
+        recipientAccountNumber: transaction.recipientAccountNumber,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "Transfer error:",
+      error.response?.data || error.message,
+    );
+
+    return res.status(500).json({
+      message: "Transfer failed",
+      error: error.response?.data || error.message,
+    });
+  }
+};
+
 module.exports = {
   createCustomerAccount,
   getCustomerAccountBalance,
   getAccountNameEnquiry,
+  transferCustomerFunds,
 };
