@@ -144,6 +144,7 @@ const getAccountNameEnquiry = async (req, res) => {
 const transferCustomerFunds = async (req, res) => {
   try {
     const { to, amount, narration } = req.body;
+    const transferAmount = Number(amount);
 
     if (!to) {
       return res.status(400).json({
@@ -157,7 +158,13 @@ const transferCustomerFunds = async (req, res) => {
       });
     }
 
-    if (Number(amount) <= 0) {
+    if (!Number.isFinite(transferAmount)) {
+      return res.status(400).json({
+        message: "Amount must be a valid number",
+      });
+    }
+
+    if (transferAmount <= 0) {
       return res.status(400).json({
         message: "Amount must be greater than 0",
       });
@@ -180,12 +187,22 @@ const transferCustomerFunds = async (req, res) => {
     const transferData = {
       from: senderAccount.accountNumber,
       to,
-      amount: Number(amount),
+      amount: transferAmount,
     };
 
     const transferResponse = await transferFunds(transferData);
     const transferDetails =
       transferResponse.transaction || transferResponse.data || transferResponse;
+    const reference =
+      transferDetails.reference ||
+      transferDetails.transactionReference ||
+      transferDetails.ref;
+
+    if (!reference) {
+      return res.status(502).json({
+        message: "Transfer response did not include a transaction reference",
+      });
+    }
 
     const transaction = new Transaction({
       customer: req.customerId,
@@ -195,12 +212,9 @@ const transferCustomerFunds = async (req, res) => {
         recipientAccount?.bankCode ||
         transferDetails.recipientBankCode ||
         transferDetails.bankCode,
-      amount: Number(amount),
+      amount: transferAmount,
       transactionType: recipientAccount ? "INTRA_BANK" : "INTER_BANK",
-      reference:
-        transferDetails.reference ||
-        transferDetails.transactionReference ||
-        transferDetails.ref,
+      reference,
       status: transferDetails.status,
       narration,
     });

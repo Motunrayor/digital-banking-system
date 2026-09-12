@@ -34,18 +34,10 @@ const validateNin = async (nin) => {
 };
 
 const getNibssToken = async () => {
-  const response = await axios.post(
-    "https://nibssbyphoenix.onrender.com/api/auth/token",
-    {
-      apiKey: process.env.NIBSS_API_KEY?.trim(),
-      apiSecret: process.env.NIBSS_API_SECRET?.trim(),
-    },
-    {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    },
-  );
+  const response = await nibssApi.post("/api/auth/token", {
+    apiKey: process.env.NIBSS_API_KEY?.trim(),
+    apiSecret: process.env.NIBSS_API_SECRET?.trim(),
+  });
 
   console.log("NIBSS token received:", !!response.data.token);
 
@@ -55,16 +47,12 @@ const getNibssToken = async () => {
 const createAccount = async (data) => {
   const token = await getNibssToken();
 
-  const response = await axios.post(
-    "https://nibssbyphoenix.onrender.com/api/account/create",
-    data,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-    }
-  );
+  const response = await nibssApi.post("/api/account/create", data, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
 
   return response.data;
 };

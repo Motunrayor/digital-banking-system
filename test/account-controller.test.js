@@ -532,3 +532,157 @@ test("transfer returns 400 when amount is not greater than zero", async () => {
     delete require.cache[controllerPath];
   }
 });
+
+test("transfer returns 400 when amount is not numeric", async () => {
+  const originalLoad = Module._load;
+  const controllerPath = require.resolve("../src/controllers/account.controller.js");
+  delete require.cache[controllerPath];
+
+  try {
+    Module._load = function mockedLoad(request, parent, isMain) {
+      if (request === "../models/customer.model") {
+        return {};
+      }
+
+      if (request === "../models/account.model") {
+        return {};
+      }
+
+      if (request === "../models/transaction.model") {
+        return function Transaction() {};
+      }
+
+      if (request === "../services/nibss.service") {
+        return {
+          createAccount: async () => ({}),
+          getAccountBalance: async () => ({}),
+          getNameEnquiry: async () => ({}),
+          transferFunds: async () => {
+            throw new Error("should not call NIBSS with a non-numeric amount");
+          },
+        };
+      }
+
+      return originalLoad.apply(this, arguments);
+    };
+
+    const { transferCustomerFunds } = require("../src/controllers/account.controller.js");
+    const req = {
+      body: {
+        to: "7621111111",
+        amount: "abc",
+      },
+      customerId: "customer-id",
+    };
+    const res = {
+      statusCode: undefined,
+      body: undefined,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(body) {
+        this.body = body;
+        return this;
+      },
+    };
+
+    await transferCustomerFunds(req, res);
+
+    assert.equal(res.statusCode, 400);
+    assert.deepEqual(res.body, {
+      message: "Amount must be a valid number",
+    });
+  } finally {
+    Module._load = originalLoad;
+    delete require.cache[controllerPath];
+  }
+});
+
+test("transfer does not save a transaction when NIBSS returns no reference", async () => {
+  const originalLoad = Module._load;
+  const controllerPath = require.resolve("../src/controllers/account.controller.js");
+  delete require.cache[controllerPath];
+
+  let saveCalled = false;
+
+  function Transaction() {
+    return {
+      async save() {
+        saveCalled = true;
+      },
+    };
+  }
+
+  try {
+    Module._load = function mockedLoad(request, parent, isMain) {
+      if (request === "../models/customer.model") {
+        return {};
+      }
+
+      if (request === "../models/account.model") {
+        return {
+          findOne: async (query) => {
+            if (query.customer === "customer-id") {
+              return {
+                accountNumber: "7628180202",
+              };
+            }
+
+            return null;
+          },
+        };
+      }
+
+      if (request === "../models/transaction.model") {
+        return Transaction;
+      }
+
+      if (request === "../services/nibss.service") {
+        return {
+          createAccount: async () => ({}),
+          getAccountBalance: async () => ({}),
+          getNameEnquiry: async () => ({}),
+          transferFunds: async () => ({
+            message: "Transfer successful",
+            status: "SUCCESSFUL",
+          }),
+        };
+      }
+
+      return originalLoad.apply(this, arguments);
+    };
+
+    const { transferCustomerFunds } = require("../src/controllers/account.controller.js");
+    const req = {
+      body: {
+        to: "9991111111",
+        amount: 2000,
+      },
+      customerId: "customer-id",
+    };
+    const res = {
+      statusCode: undefined,
+      body: undefined,
+      status(code) {
+        this.statusCode = code;
+        return this;
+      },
+      json(body) {
+        this.body = body;
+        return this;
+      },
+    };
+
+    await transferCustomerFunds(req, res);
+
+    assert.equal(saveCalled, false);
+    assert.equal(res.statusCode, 502);
+    assert.deepEqual(res.body, {
+      message: "Transfer response did not include a transaction reference",
+    });
+  } finally {
+    Module._load = originalLoad;
+    delete require.cache[controllerPath];
+  }
+});
